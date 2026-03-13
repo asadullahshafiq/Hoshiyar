@@ -27,12 +27,6 @@ import com.assistant.personal.storage.CommandStorage
 import com.assistant.personal.voice.VoskSpeechManager
 import java.util.Locale
 
-/**
- * Main Assistant Screen
- * Home button lamba dabane par khulti hai
- * VOSK - 100% Offline Speech Recognition
- * Fallback: Internet available ho to Google Speech
- */
 class AssistActivity : AppCompatActivity() {
 
     private lateinit var voskManager: VoskSpeechManager
@@ -41,7 +35,6 @@ class AssistActivity : AppCompatActivity() {
     private lateinit var commandStorage: CommandStorage
     private lateinit var actionExecutor: ActionExecutor
 
-    // UI
     private lateinit var tvStatus: TextView
     private lateinit var tvResult: TextView
     private lateinit var ivWave: ImageView
@@ -55,10 +48,7 @@ class AssistActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        )
+        window.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
         setContentView(R.layout.activity_assist)
         initViews()
         initStorage()
@@ -67,18 +57,14 @@ class AssistActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        tvStatus    = findViewById(R.id.tv_status)
-        tvResult    = findViewById(R.id.tv_result)
-        ivWave      = findViewById(R.id.iv_wave)
-        bgOverlay   = findViewById(R.id.bg_overlay)
+        tvStatus = findViewById(R.id.tv_status)
+        tvResult = findViewById(R.id.tv_result)
+        ivWave = findViewById(R.id.iv_wave)
+        bgOverlay = findViewById(R.id.bg_overlay)
         progressBar = findViewById(R.id.progress_download)
-        tvProgress  = findViewById(R.id.tv_progress)
-
+        tvProgress = findViewById(R.id.tv_progress)
         bgOverlay.setOnClickListener { finishWithAnimation() }
-        ivWave.setOnClickListener {
-            if (voskReady) startVoskListening()
-            else startOnlineListening()
-        }
+        ivWave.setOnClickListener { if (voskReady) startVoskListening() else startOnlineListening() }
     }
 
     private fun initStorage() {
@@ -102,8 +88,7 @@ class AssistActivity : AppCompatActivity() {
     }
 
     private fun checkPermissionAndInitVosk() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 101)
         } else {
             initVosk()
@@ -112,35 +97,26 @@ class AssistActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 101 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            initVosk()
-        } else {
-            tvStatus.text = "Microphone permission chahiye!"
-        }
+        if (requestCode == 101 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) initVosk()
+        else tvStatus.text = "Microphone permission chahiye!"
     }
 
     private fun initVosk() {
-        tvStatus.text = "🔄 Tayyar ho raha hun..."
-
+        tvStatus.text = "Tayyar ho raha hun..."
         voskManager = VoskSpeechManager(
             context = this,
-            onResult   = { text    -> handler.post { processCommand(text) } },
-            onPartial  = { partial -> handler.post { tvResult.text = partial } },
-            onError    = { error   -> handler.post { handleVoskError(error) } },
-            onReady    = {
+            onResult = { text -> handler.post { processCommand(text) } },
+            onPartial = { partial -> handler.post { tvResult.text = partial } },
+            onError = { error -> handler.post { handleVoskError(error) } },
+            onReady = {
                 handler.post {
                     voskReady = true
                     hideDownloadUI()
-                    tvStatus.text = "🎤 بولیں... (Offline ✅)"
+                    tvStatus.text = "Bolein... (Offline)"
                     startVoskListening()
                 }
             },
-            onModelDownloadProgress = { progress ->
-                handler.post {
-                    progressBar.progress = progress
-                    tvProgress.text = "Model download: $progress%"
-                }
-            }
+            onModelDownloadProgress = { progress -> handler.post { progressBar.progress = progress; tvProgress.text = "Download: $progress%" } }
         )
         voskManager.initialize()
     }
@@ -148,16 +124,13 @@ class AssistActivity : AppCompatActivity() {
     private fun handleVoskError(error: String) {
         when (error) {
             "MODEL_NOT_FOUND" -> showModelDownloadUI()
-            "TIMEOUT"         -> startVoskListening()
-            else -> {
-                tvStatus.text = "⚡ Online mode mein switch..."
-                startOnlineListening()
-            }
+            "TIMEOUT" -> startVoskListening()
+            else -> startOnlineListening()
         }
     }
 
     private fun startVoskListening() {
-        tvStatus.text = "🎤 بولیں... (Offline ✅)"
+        tvStatus.text = "Bolein... (Offline)"
         tvResult.text = ""
         startWaveAnimation()
         voskManager.startListening()
@@ -165,26 +138,24 @@ class AssistActivity : AppCompatActivity() {
 
     private fun showModelDownloadUI() {
         progressBar.visibility = View.VISIBLE
-        tvProgress.visibility  = View.VISIBLE
-        tvStatus.text = "📥 Pehli dafa model download ho raha hai..."
-        tvResult.text = "50MB - sirf ek dafa - phir hamesha offline"
+        tvProgress.visibility = View.VISIBLE
+        tvStatus.text = "Offline model download ho raha hai..."
+        tvResult.text = "50MB - sirf ek dafa"
         voskManager.downloadModel()
     }
 
     private fun hideDownloadUI() {
         progressBar.visibility = View.GONE
-        tvProgress.visibility  = View.GONE
+        tvProgress.visibility = View.GONE
     }
 
-    // ===== ONLINE FALLBACK =====
     private fun startOnlineListening() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            tvStatus.text = "❌ Internet nahi, model bhi nahi"
+            tvStatus.text = "Internet nahi, model bhi nahi"
             return
         }
-        tvStatus.text = "🎤 بولیں... (Online)"
+        tvStatus.text = "Bolein... (Online)"
         startWaveAnimation()
-
         onlineSpeech = SpeechRecognizer.createSpeechRecognizer(this)
         onlineSpeech?.setRecognitionListener(object : RecognitionListener {
             override fun onResults(r: Bundle?) {
@@ -195,50 +166,43 @@ class AssistActivity : AppCompatActivity() {
             override fun onPartialResults(p: Bundle?) { tvResult.text = p?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: "" }
             override fun onReadyForSpeech(p: Bundle?) {}
             override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(r: Float) { val s = 1f+(r/20f).coerceIn(0f,1f); ivWave.scaleX=s; ivWave.scaleY=s }
+            override fun onRmsChanged(r: Float) { val s = 1f + (r / 20f).coerceIn(0f, 1f); ivWave.scaleX = s; ivWave.scaleY = s }
             override fun onBufferReceived(b: ByteArray?) {}
             override fun onEndOfSpeech() { stopWaveAnimation() }
             override fun onEvent(t: Int, p: Bundle?) {}
         })
-
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGES, "ur-PK,en-US,hi-IN")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ur-PK")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
         onlineSpeech?.startListening(intent)
     }
 
-    // ===== COMMAND PROCESS =====
     private fun processCommand(spokenText: String) {
         if (::voskManager.isInitialized) voskManager.stopListening()
         stopWaveAnimation()
         tvResult.text = "\"$spokenText\""
-        tvStatus.text = "✅ سمجھ آ گیا"
-
+        tvStatus.text = "Samajh aa gaya"
         val custom = commandStorage.findCommand(spokenText)
         if (custom != null) {
             actionExecutor.execute(custom, spokenText)
             handler.postDelayed({ finishWithAnimation() }, 1800)
             return
         }
-
         if (actionExecutor.executeBuiltIn(spokenText)) {
             handler.postDelayed({ finishWithAnimation() }, 1800)
             return
         }
-
-        tvStatus.text = "❓ Command nahi mili"
-        if (ttsReady) actionExecutor.speak("Ye command maloom nahi. App mein add kar sakte hain.")
+        tvStatus.text = "Command nahi mili"
+        if (ttsReady) actionExecutor.speak("Ye command maloom nahi")
         handler.postDelayed({ if (voskReady) startVoskListening() else startOnlineListening() }, 2500)
     }
 
-    // ===== ANIMATIONS =====
     private fun startWaveAnimation() {
         val anim = ObjectAnimator.ofFloat(ivWave, "alpha", 0.5f, 1f).apply {
-            duration = 500; repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
+            duration = 500; repeatCount = ValueAnimator.INFINITE; repeatMode = ValueAnimator.REVERSE
             interpolator = AccelerateDecelerateInterpolator()
         }
         anim.start(); ivWave.tag = anim
@@ -249,9 +213,7 @@ class AssistActivity : AppCompatActivity() {
         ivWave.alpha = 1f; ivWave.scaleX = 1f; ivWave.scaleY = 1f
     }
 
-    private fun finishWithAnimation() {
-        finish(); overridePendingTransition(0, android.R.anim.fade_out)
-    }
+    private fun finishWithAnimation() { finish(); overridePendingTransition(0, android.R.anim.fade_out) }
 
     override fun onDestroy() {
         super.onDestroy()
