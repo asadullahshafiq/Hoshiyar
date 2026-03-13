@@ -2,7 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.assistant.personal">
 
-    <!-- Permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.SEND_SMS" />
@@ -23,18 +22,16 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.MANAGE_MEDIA_PLAYBACK" />
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/ic_assistant"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_assistant"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
 
-        <!-- Main Activity -->
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
@@ -45,7 +42,6 @@
             </intent-filter>
         </activity>
 
-        <!-- ===== DEFAULT ASSIST ACTIVITY (Home Button Long Press) ===== -->
         <activity
             android:name=".ui.AssistActivity"
             android:exported="true"
@@ -62,25 +58,20 @@
             </intent-filter>
         </activity>
 
-        <!-- Command Manager Activity -->
         <activity
             android:name=".ui.CommandManagerActivity"
             android:exported="false"
             android:label="@string/commands_label" />
 
-        <!-- Settings Activity -->
         <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_label" />
 
-        <!-- Background Service -->
         <service
             android:name=".core.AssistantService"
-            android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:exported="false" />
 
-        <!-- Boot Receiver -->
         <receiver
             android:name=".core.BootReceiver"
             android:exported="true">
