@@ -230,23 +230,3 @@ class VoskSpeechManager(
         scope.cancel()
     }
 }
-```
-
-**Commit** ✅
-
----
-
-## Yeh Kaise Kaam Karega
-```
-GitHub Actions
-    ↓
-Vosk model download (build ke waqt)
-    ↓
-Model APK mein bundle ho jata hai
-    ↓
-Aap APK install karo
-    ↓
-Pehli dafa khulne par model
-phone ke andar copy hota hai
-    ↓
-Hamesha OFFLINE! Koi download nahi!
