@@ -3,9 +3,10 @@ package com.assistant.personal.ui
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -17,7 +18,6 @@ import com.assistant.personal.storage.CommandStorage
 class MainActivity : AppCompatActivity() {
 
     private lateinit var commandStorage: CommandStorage
-    private val PERMISSION_REQUEST = 100
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,23 +28,32 @@ class MainActivity : AppCompatActivity() {
 
         setupUI()
         checkPermissions()
-        checkDefaultAssistant()
     }
 
     private fun setupUI() {
-        // Assistant ko kholo button
+        // Assistant kholo
         findViewById<Button>(R.id.btn_open_assistant).setOnClickListener {
             startActivity(Intent(this, AssistActivity::class.java))
         }
 
-        // Commands manage karo
+        // Commands
         findViewById<Button>(R.id.btn_manage_commands).setOnClickListener {
             startActivity(Intent(this, CommandManagerActivity::class.java))
         }
 
-        // Default assistant set karo
+        // Default assistant
         findViewById<Button>(R.id.btn_set_default).setOnClickListener {
             openDefaultAssistantSettings()
+        }
+
+        // Floating Ball Toggle
+        findViewById<Button>(R.id.btn_floating_ball).setOnClickListener {
+            toggleFloatingBall()
+        }
+
+        // Accessibility
+        findViewById<Button>(R.id.btn_accessibility).setOnClickListener {
+            openAccessibilitySettings()
         }
 
         // Settings
@@ -52,13 +61,51 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
-        // Commands count
         updateCommandCount()
+        checkDefaultAssistant()
+    }
+
+    private fun toggleFloatingBall() {
+        // Overlay permission check
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            !Settings.canDrawOverlays(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Permission Chahiye")
+                .setMessage("Floating ball ke liye 'Display over other apps' allow karein")
+                .setPositiveButton("Settings Kholo") { _, _ ->
+                    startActivity(Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    ))
+                }
+                .setNegativeButton("Baad Mein", null)
+                .show()
+            return
+        }
+        FloatingBallService.start(this)
+        Toast.makeText(this, "🤖 Floating ball on! Screen par dikh raha hai", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun openAccessibilitySettings() {
+        AlertDialog.Builder(this)
+            .setTitle("Automation On Karein")
+            .setMessage(
+                "Scroll, click, type karne ke liye:\n\n" +
+                "1. Settings khulegi\n" +
+                "2. 'Hoshiyar Automation' dhundein\n" +
+                "3. ON karein\n\n" +
+                "Yeh sirf aapke phone par kaam karta hai"
+            )
+            .setPositiveButton("Settings Kholo") { _, _ ->
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+            .setNegativeButton("Baad Mein", null)
+            .show()
     }
 
     private fun updateCommandCount() {
         val count = commandStorage.loadCommands().size
-        findViewById<TextView>(R.id.tv_command_count)?.text = "کل Commands: $count"
+        findViewById<TextView>(R.id.tv_command_count)?.text = "Kul Commands: $count"
     }
 
     private fun checkPermissions() {
@@ -68,54 +115,32 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.SEND_SMS,
             Manifest.permission.READ_CONTACTS
         )
-
         val missing = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-
-        if (missing.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toTypedArray(), PERMISSION_REQUEST)
-        }
+        if (missing.isNotEmpty())
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
     }
 
     private fun checkDefaultAssistant() {
         val statusView = findViewById<TextView>(R.id.tv_default_status)
-        // Check if we are default assistant
         val assistPackage = Settings.Secure.getString(
-            contentResolver,
-            "voice_interaction_service"
-        )
-
+            contentResolver, "voice_interaction_service")
         if (assistPackage?.contains(packageName) == true) {
             statusView?.text = "✅ Default Assistant Set Hai"
             statusView?.setTextColor(getColor(R.color.green))
         } else {
-            statusView?.text = "⚠️ Default Assistant Set Nahi - Neeche Set Karen"
+            statusView?.text = "⚠️ Default Assistant Set Nahi"
             statusView?.setTextColor(getColor(R.color.orange))
         }
     }
 
     private fun openDefaultAssistantSettings() {
-        AlertDialog.Builder(this)
-            .setTitle("Default Assistant Set Karen")
-            .setMessage(
-                "1. Abhi Settings khulegi\n" +
-                "2. 'Default Apps' ya 'Assist & voice input' par tap karen\n" +
-                "3. 'Assist app' select karen\n" +
-                "4. 'Personal Assistant' choose karen\n\n" +
-                "Samsung A10s mein: Settings > Apps > Default Apps > Assist app"
-            )
-            .setPositiveButton("Settings Kholo") { _, _ ->
-                try {
-                    startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    })
-                } catch (e: Exception) {
-                    startActivity(Intent(Settings.ACTION_SETTINGS))
-                }
-            }
-            .setNegativeButton("Baad Mein", null)
-            .show()
+        try {
+            startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+        } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
     }
 
     override fun onResume() {
