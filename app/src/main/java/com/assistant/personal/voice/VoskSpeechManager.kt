@@ -1,24 +1,20 @@
 package com.assistant.personal.voice
 
 import android.content.Context
-import android.util.Log
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import kotlinx.coroutines.*
 import org.vosk.Model
 import org.vosk.Recognizer
-import org.vosk.android.RecognitionListener
-import org.vosk.android.SpeechService
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.zip.ZipInputStream
 
 /**
- * VOSK - 100% Offline Speech Recognition
- * Koi internet nahi chahiye
- * Urdu + English dono samjhta hai
- * Samsung A10s par smoothly chalta hai (~50MB model)
+ * VOSK - 100% Offline
+ * Model APK ke andar hai - koi download nahi
+ * 100% private - koi internet nahi
  */
 class VoskSpeechManager(
     private val context: Context,
@@ -29,29 +25,92 @@ class VoskSpeechManager(
     private val onModelDownloadProgress: (Int) -> Unit
 ) {
     private var model: Model? = null
-    private var speechService: SpeechService? = null
+    private var recognizer: Recognizer? = null
+    private var audioRecord: AudioRecord? = null
+    private var isListening = false
     private var isModelLoaded = false
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    // Model folder phone mein
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val modelDir = File(context.filesDir, "vosk-model")
 
-    // ===== Model Check & Load =====
+    private val SAMPLE_RATE = 16000
+    private val CHANNEL = AudioFormat.CHANNEL_IN_MONO
+    private val FORMAT = AudioFormat.ENCODING_PCM_16BIT
+    private val BUFFER_SIZE = AudioRecord.getMinBufferSize(
+        SAMPLE_RATE, CHANNEL, FORMAT) * 4
+
+    // ===== Initialize =====
     fun initialize() {
         scope.launch {
-            if (isModelReady()) {
+            // Pehle check karo model already copy hua hai?
+            if (modelDir.exists() && modelDir.listFiles()?.isNotEmpty() == true) {
                 loadModel()
             } else {
-                // Model nahi hai - download karo
+                // APK ke assets se copy karo
                 withContext(Dispatchers.Main) {
-                    onError("MODEL_NOT_FOUND") // UI ko batao download shuru karo
+                    onModelDownloadProgress(0)
+                }
+                copyModelFromAssets()
+            }
+        }
+    }
+
+    // ===== Assets se Copy =====
+    private suspend fun copyModelFromAssets() {
+        withContext(Dispatchers.IO) {
+            try {
+                val assetManager = context.assets
+                val assetFiles = assetManager.list("vosk-model") ?: emptyArray()
+
+                if (assetFiles.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        onError("MODEL_NOT_FOUND")
+                    }
+                    return@withContext
+                }
+
+                modelDir.mkdirs()
+                copyAssetFolder(assetManager, "vosk-model", modelDir.absolutePath)
+
+                withContext(Dispatchers.Main) {
+                    onModelDownloadProgress(100)
+                }
+
+                loadModel()
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onError("Copy error: ${e.message}")
                 }
             }
         }
     }
 
-    fun isModelReady(): Boolean {
-        return modelDir.exists() && File(modelDir, "am/final.mdl").exists()
+    private fun copyAssetFolder(
+        assetManager: android.content.res.AssetManager,
+        assetPath: String,
+        destPath: String
+    ) {
+        val files = assetManager.list(assetPath) ?: return
+        File(destPath).mkdirs()
+
+        for (file in files) {
+            val srcPath = "$assetPath/$file"
+            val dstPath = "$destPath/$file"
+            val subFiles = assetManager.list(srcPath)
+
+            if (subFiles != null && subFiles.isNotEmpty()) {
+                // Folder hai - recursion
+                copyAssetFolder(assetManager, srcPath, dstPath)
+            } else {
+                // File hai - copy karo
+                assetManager.open(srcPath).use { input ->
+                    FileOutputStream(File(dstPath)).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+        }
     }
 
     // ===== Model Load =====
@@ -71,145 +130,123 @@ class VoskSpeechManager(
         }
     }
 
-    // ===== Download Model (Sirf Ek Dafa) =====
+    // ===== Download - Ab Zarurat Nahi =====
     fun downloadModel() {
-        scope.launch {
-            try {
-                // Small Urdu+English model (~50MB)
-                // Vosk ka small model use karein jo Urdu/Hindi bhi samjhe
-                val modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip"
-
-                withContext(Dispatchers.Main) {
-                    onModelDownloadProgress(0)
-                }
-
-                modelDir.mkdirs()
-                val zipFile = File(context.cacheDir, "vosk_model.zip")
-
-                // Download
-                val connection = URL(modelUrl).openConnection() as HttpURLConnection
-                connection.connect()
-                val totalSize = connection.contentLength
-                var downloadedSize = 0
-
-                connection.inputStream.use { input ->
-                    FileOutputStream(zipFile).use { output ->
-                        val buffer = ByteArray(8192)
-                        var bytes: Int
-                        while (input.read(buffer).also { bytes = it } != -1) {
-                            output.write(buffer, 0, bytes)
-                            downloadedSize += bytes
-                            val progress = if (totalSize > 0) (downloadedSize * 100 / totalSize) else 0
-                            withContext(Dispatchers.Main) {
-                                onModelDownloadProgress(progress)
-                            }
-                        }
-                    }
-                }
-
-                // Extract ZIP
-                withContext(Dispatchers.Main) { onModelDownloadProgress(95) }
-                extractZip(zipFile, context.filesDir)
-                zipFile.delete()
-
-                // Rename extracted folder
-                val extractedDir = context.filesDir.listFiles()?.find {
-                    it.isDirectory && it.name.startsWith("vosk-model")
-                }
-                extractedDir?.renameTo(modelDir)
-
-                withContext(Dispatchers.Main) { onModelDownloadProgress(100) }
-                loadModel()
-
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    onError("Download fail: ${e.message}")
-                }
-            }
-        }
+        // Model ab APK mein hai - download nahi hoga
+        initialize()
     }
 
-    private fun extractZip(zipFile: File, destDir: File) {
-        ZipInputStream(zipFile.inputStream()).use { zis ->
-            var entry = zis.nextEntry
-            while (entry != null) {
-                val outFile = File(destDir, entry.name)
-                if (entry.isDirectory) {
-                    outFile.mkdirs()
-                } else {
-                    outFile.parentFile?.mkdirs()
-                    FileOutputStream(outFile).use { fos ->
-                        zis.copyTo(fos)
-                    }
-                }
-                entry = zis.nextEntry
-            }
-        }
-    }
+    fun isModelReady(): Boolean = modelDir.exists() &&
+        modelDir.listFiles()?.isNotEmpty() == true
 
-    // ===== Sunna Shuru Karo =====
+    // ===== Start Listening =====
     fun startListening() {
         if (!isModelLoaded || model == null) {
             onError("Model tayyar nahi")
             return
         }
+        if (isListening) return
+        isListening = true
 
-        try {
-            val recognizer = Recognizer(model, 16000.0f)
-            speechService = SpeechService(recognizer, 16000.0f)
-            speechService?.startListening(object : RecognitionListener {
+        scope.launch(Dispatchers.IO) {
+            try {
+                recognizer = Recognizer(model, SAMPLE_RATE.toFloat())
 
-                override fun onPartialResult(hypothesis: String?) {
-                    hypothesis ?: return
-                    try {
-                        val partial = JSONObject(hypothesis).optString("partial", "")
-                        if (partial.isNotEmpty()) {
-                            onPartial(partial)
+                audioRecord = AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    SAMPLE_RATE, CHANNEL, FORMAT, BUFFER_SIZE
+                )
+
+                if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                    withContext(Dispatchers.Main) {
+                        onError("Mic initialize nahi hua")
+                    }
+                    isListening = false
+                    return@launch
+                }
+
+                audioRecord?.startRecording()
+                val buffer = ShortArray(BUFFER_SIZE / 2)
+
+                while (isListening) {
+                    val read = audioRecord?.read(buffer, 0, buffer.size) ?: break
+                    if (read > 0) {
+                        val bytes = ByteArray(read * 2)
+                        for (i in 0 until read) {
+                            bytes[i * 2] = (buffer[i].toInt() and 0xFF).toByte()
+                            bytes[i * 2 + 1] = (buffer[i].toInt() shr 8).toByte()
                         }
-                    } catch (e: Exception) { /* ignore */ }
-                }
 
-                override fun onResult(hypothesis: String?) {
-                    hypothesis ?: return
-                    try {
-                        val text = JSONObject(hypothesis).optString("text", "")
-                        if (text.isNotEmpty()) {
-                            onResult(text)
+                        val accepted = recognizer?.acceptWaveForm(bytes, bytes.size)
+
+                        if (accepted == true) {
+                            val json = recognizer?.result ?: continue
+                            val text = JSONObject(json).optString("text", "")
+                            if (text.isNotBlank()) {
+                                withContext(Dispatchers.Main) { onResult(text) }
+                                isListening = false
+                            }
+                        } else {
+                            val json = recognizer?.partialResult ?: continue
+                            val partial = JSONObject(json).optString("partial", "")
+                            if (partial.isNotBlank()) {
+                                withContext(Dispatchers.Main) { onPartial(partial) }
+                            }
                         }
-                    } catch (e: Exception) { /* ignore */ }
+                    }
                 }
 
-                override fun onFinalResult(hypothesis: String?) {
-                    hypothesis ?: return
-                    try {
-                        val text = JSONObject(hypothesis).optString("text", "")
-                        if (text.isNotEmpty()) {
-                            onResult(text)
-                        }
-                    } catch (e: Exception) { /* ignore */ }
+                audioRecord?.stop()
+                audioRecord?.release()
+                audioRecord = null
+
+                val finalJson = recognizer?.finalResult ?: return@launch
+                val finalText = JSONObject(finalJson).optString("text", "")
+                if (finalText.isNotBlank()) {
+                    withContext(Dispatchers.Main) { onResult(finalText) }
                 }
 
-                override fun onError(e: Exception?) {
-                    onError(e?.message ?: "Koi error aayi")
-                }
-
-                override fun onTimeout() {
-                    onError("TIMEOUT")
-                }
-            })
-        } catch (e: Exception) {
-            onError("Sunna shuru nahi hua: ${e.message}")
+            } catch (e: Exception) {
+                isListening = false
+                withContext(Dispatchers.Main) { onError("Mic error: ${e.message}") }
+            }
         }
     }
 
-    // ===== Sunna Band Karo =====
+    // ===== Stop =====
     fun stopListening() {
-        speechService?.stop()
+        isListening = false
+        try {
+            audioRecord?.stop()
+            audioRecord?.release()
+            audioRecord = null
+        } catch (e: Exception) { }
     }
 
     fun destroy() {
-        speechService?.shutdown()
+        stopListening()
+        recognizer?.close()
         model?.close()
         scope.cancel()
     }
 }
+```
+
+**Commit** ✅
+
+---
+
+## Yeh Kaise Kaam Karega
+```
+GitHub Actions
+    ↓
+Vosk model download (build ke waqt)
+    ↓
+Model APK mein bundle ho jata hai
+    ↓
+Aap APK install karo
+    ↓
+Pehli dafa khulne par model
+phone ke andar copy hota hai
+    ↓
+Hamesha OFFLINE! Koi download nahi!
