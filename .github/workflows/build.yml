@@ -21,7 +21,17 @@ jobs:
 
     - uses: android-actions/setup-android@v3
 
-    - name: Build APK
+    - name: Vosk Model Download karo aur APK mein bundle karo
+      run: |
+        mkdir -p app/src/main/assets
+        cd app/src/main/assets
+        wget -q https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip
+        unzip -q vosk-model-small-en-in-0.4.zip
+        mv vosk-model-small-en-in-0.4 vosk-model
+        rm vosk-model-small-en-in-0.4.zip
+        echo "Model ready!"
+
+    - name: APK banao
       run: gradle assembleDebug
 
     - uses: actions/upload-artifact@v4
