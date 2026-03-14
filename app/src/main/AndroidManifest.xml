@@ -18,6 +18,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <application
         android:allowBackup="false"
@@ -60,13 +65,11 @@
             android:exported="false"
             android:label="@string/settings_label" />
 
-        <!-- Floating Ball Service -->
         <service
             android:name=".ui.FloatingBallService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
-        <!-- Automation Accessibility Service -->
         <service
             android:name=".core.AutomationService"
             android:exported="true"
@@ -88,5 +91,59 @@
             </intent-filter>
         </receiver>
 
+        <!-- Reminder Receiver -->
+        <receiver
+            android:name=".core.ReminderReceiver"
+            android:exported="false" />
+
     </application>
 </manifest>
+```
+**Commit** ✅
+
+---
+
+## Saat Files Commit Karo — Green Hone Par Nai APK Install Karo!
+
+## Ab Yeh Commands Kaam Karengi:
+
+**Calculator:**
+```
+50 plus 30
+100 divided by 4
+25 percent of 200
+```
+
+**Notes:**
+```
+note karo meeting kal hai
+my note
+last note
+```
+
+**Reminder:**
+```
+remind me in 30 minutes to drink water
+remind me in 1 hour meeting hai
+```
+
+**Alarm:**
+```
+alarm 7:30
+alarm 8 am
+wake me at 6:30
+```
+
+**Dictionary:**
+```
+meaning of patience
+define courage
+hope ka matlab
+```
+
+**Shortcuts:**
+```
+yt    → YouTube
+wa    → WhatsApp
+ig    → Instagram
+fb    → Facebook
