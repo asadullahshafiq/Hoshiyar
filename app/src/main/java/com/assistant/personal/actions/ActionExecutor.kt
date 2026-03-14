@@ -42,65 +42,29 @@ class ActionExecutor(
     fun executeBuiltIn(text: String): Boolean {
         val t = text.lowercase().trim()
 
-        // ===== OPEN APP =====
-        if (t.startsWith("open ") || t.contains("kholo")) {
-            val appName = t
-                .replace("open ", "")
-                .replace("kholo", "")
-                .trim()
+        if (t.startsWith("open ") || t.endsWith("kholo") || t.endsWith("open")) {
+            val appName = t.replace("open ", "").replace("kholo", "").trim()
             return openApp(appName)
         }
-
-        // ===== TIME =====
-        if (t.contains("time") || t.contains("baja") || t.contains("waqt")) return tellTime()
-
-        // ===== DATE =====
-        if (t.contains("date") || t.contains("tarikh")) return tellDate()
-
-        // ===== BATTERY =====
+        if (t.contains("time") || t.contains("what time") || t.contains("baja")) return tellTime()
+        if (t.contains("date") || t.contains("today")) return tellDate()
         if (t.contains("battery")) return tellBattery()
-
-        // ===== TORCH =====
         if (t.contains("torch") || t.contains("flashlight")) {
-            val on = t.contains("on") || t.contains("chala")
-            return controlTorch(on)
+            return controlTorch(t.contains("on"))
         }
-
-        // ===== WIFI =====
-        if (t.contains("wifi")) {
-            val on = t.contains("on") || t.contains("chala")
-            return controlWifi(on)
-        }
-
-        // ===== BLUETOOTH =====
-        if (t.contains("bluetooth")) {
-            val on = t.contains("on") || t.contains("chala")
-            return controlBluetooth(on)
-        }
-
-        // ===== VOLUME =====
-        if (t.contains("volume") || t.contains("awaaz")) {
+        if (t.contains("wifi")) return controlWifi(t.contains("on"))
+        if (t.contains("bluetooth")) return controlBluetooth(t.contains("on"))
+        if (t.contains("volume")) {
             return when {
-                t.contains("barha") || t.contains("up") -> controlVolume("up")
-                t.contains("ghata") || t.contains("down") -> controlVolume("down")
+                t.contains("up") || t.contains("increase") -> controlVolume("up")
+                t.contains("down") || t.contains("decrease") -> controlVolume("down")
                 t.contains("mute") -> controlVolume("mute")
                 else -> false
             }
         }
-
-        // ===== CAMERA =====
-        if (t.contains("camera")) return openApp("camera")
-
-        // ===== CALCULATOR =====
-        if (t.contains("calculator")) return openApp("calculator")
-
-        // ===== SETTINGS =====
-        if (t.contains("settings")) return openApp("settings")
-
         return false
     }
 
-    // ===== MAKE CALL =====
     private fun makeCall(phoneNumber: String): Boolean {
         return try {
             val intent = Intent(Intent.ACTION_CALL).apply {
@@ -108,33 +72,32 @@ class ActionExecutor(
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(intent)
+            speak("Calling $phoneNumber")
             true
         } catch (e: Exception) {
-            speak("Call nahi ho saka")
+            speak("Call failed")
             false
         }
     }
 
-    // ===== SEND SMS =====
     private fun sendSms(number: String, message: String): Boolean {
         return try {
             val smsManager = android.telephony.SmsManager.getDefault()
             smsManager.sendTextMessage(number, null, message, null, null)
-            speak("Message bhej diya")
+            speak("Message sent")
             true
         } catch (e: Exception) {
-            speak("Message nahi gaya")
+            speak("Message failed")
             false
         }
     }
 
-    // ===== OPEN APP =====
     fun openApp(appName: String): Boolean {
         return try {
             val packageName = getPackageName(appName)
-            val intent = if (packageName != null) {
+            val intent = if (packageName != null)
                 context.packageManager.getLaunchIntentForPackage(packageName)
-            } else null
+            else null
 
             val finalIntent = intent ?: when (appName.lowercase().trim()) {
                 "camera" -> Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
@@ -145,59 +108,57 @@ class ActionExecutor(
             finalIntent?.let {
                 it.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 context.startActivity(it)
-                speak("$appName khol diya")
+                speak("Opening $appName")
                 true
             } ?: run {
-                speak("$appName nahi mila")
+                speak("$appName not found")
                 false
             }
         } catch (e: Exception) {
-            speak("App nahi khula")
+            speak("Cannot open app")
             false
         }
     }
 
-    // ===== TORCH =====
     fun controlTorch(enable: Boolean): Boolean {
         return try {
-            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val cameraId = cameraManager.cameraIdList[0]
-            cameraManager.setTorchMode(cameraId, enable)
-            if (enable) speak("Torch on") else speak("Torch off")
+            val cm = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            cm.setTorchMode(cm.cameraIdList[0], enable)
+            speak(if (enable) "Torch on" else "Torch off")
             true
         } catch (e: Exception) { false }
     }
 
-    // ===== WIFI =====
     @Suppress("DEPRECATION")
-    private fun controlWifi(enable: Boolean): Boolean {
+    fun controlWifi(enable: Boolean): Boolean {
         return try {
-            val wifiManager = context.applicationContext
+            val wm = context.applicationContext
                 .getSystemService(Context.WIFI_SERVICE) as WifiManager
-            wifiManager.isWifiEnabled = enable
-            if (enable) speak("WiFi on kar diya") else speak("WiFi off kar diya")
+            wm.isWifiEnabled = enable
+            speak(if (enable) "WiFi on" else "WiFi off")
             true
         } catch (e: Exception) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val panelIntent = Intent(
-                        Settings.Panel.ACTION_WIFI
-                    ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
-                    context.startActivity(panelIntent)
-                    speak("WiFi panel khul gaya")
+                    context.startActivity(
+                        Intent(Settings.Panel.ACTION_WIFI).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                    )
+                    speak("WiFi panel opened")
                 } else {
-                    val intent = Intent(Settings.ACTION_WIFI_SETTINGS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    context.startActivity(intent)
-                    speak("WiFi settings khul gayi")
+                    context.startActivity(
+                        Intent(Settings.ACTION_WIFI_SETTINGS).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                    )
+                    speak("WiFi settings opened")
                 }
                 true
             } catch (e2: Exception) { false }
         }
     }
 
-    // ===== BLUETOOTH =====
     private fun controlBluetooth(enable: Boolean): Boolean {
         return try {
             val bt = BluetoothAdapter.getDefaultAdapter()
@@ -207,7 +168,6 @@ class ActionExecutor(
         } catch (e: Exception) { false }
     }
 
-    // ===== VOLUME =====
     private fun controlVolume(direction: String): Boolean {
         return try {
             when (direction) {
@@ -217,7 +177,7 @@ class ActionExecutor(
                         AudioManager.ADJUST_RAISE,
                         AudioManager.FLAG_SHOW_UI
                     )
-                    speak("Volume barha diya")
+                    speak("Volume increased")
                 }
                 "down" -> {
                     audioManager.adjustStreamVolume(
@@ -225,7 +185,7 @@ class ActionExecutor(
                         AudioManager.ADJUST_LOWER,
                         AudioManager.FLAG_SHOW_UI
                     )
-                    speak("Volume ghata diya")
+                    speak("Volume decreased")
                 }
                 "mute" -> {
                     audioManager.adjustStreamVolume(
@@ -233,15 +193,14 @@ class ActionExecutor(
                         AudioManager.ADJUST_MUTE,
                         AudioManager.FLAG_SHOW_UI
                     )
-                    speak("Mute kar diya")
+                    speak("Muted")
                 }
             }
             true
         } catch (e: Exception) { false }
     }
 
-    // ===== ALARM =====
-    private fun setAlarm(spokenText: String): Boolean {
+    private fun setAlarm(text: String): Boolean {
         return try {
             val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
                 putExtra(AlarmClock.EXTRA_HOUR, 7)
@@ -249,75 +208,66 @@ class ActionExecutor(
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(intent)
-            speak("Alarm set kar diya")
+            speak("Alarm set")
             true
         } catch (e: Exception) { false }
     }
 
-    // ===== TIME =====
     private fun tellTime(): Boolean {
         val cal = Calendar.getInstance()
         val hour = cal.get(Calendar.HOUR_OF_DAY)
         val minute = cal.get(Calendar.MINUTE)
-        val amPm = when {
-            hour < 12 -> "subah"
-            hour < 17 -> "dopehar"
-            hour < 20 -> "shaam"
-            else -> "raat"
+        val period = when {
+            hour < 12 -> "AM"
+            else -> "PM"
         }
         val hour12 = when {
             hour > 12 -> hour - 12
             hour == 0 -> 12
             else -> hour
         }
-        speak("$amPm ke $hour12 baj ke $minute minute")
+        speak("It is $hour12 : $minute $period")
         return true
     }
 
-    // ===== DATE =====
     private fun tellDate(): Boolean {
-        val sdf = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
-        speak("Aaj ${sdf.format(Date())} hai")
+        val sdf = SimpleDateFormat("MMMM dd yyyy", Locale.ENGLISH)
+        speak("Today is ${sdf.format(Date())}")
         return true
     }
 
-    // ===== BATTERY =====
     private fun tellBattery(): Boolean {
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         val charging = bm.isCharging
-        val status = if (charging) "charge ho rahi hai" else "charge nahi ho rahi"
-        speak("Battery $level percent hai aur $status")
+        speak("Battery is $level percent. ${if (charging) "Charging" else "Not charging"}")
         return true
     }
 
-    // ===== SPEAK =====
     fun speak(text: String) {
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "assistant")
     }
 
-    // ===== GET PACKAGE NAME =====
-    private fun getPackageName(appName: String): String? {
+    fun getPackageName(appName: String): String? {
         val name = appName.lowercase().trim()
-
         return try {
             val pm = context.packageManager
             val packages = pm.getInstalledApplications(0)
 
-            // Exact match pehle
-            val exact = packages.find { pkg ->
-                pm.getApplicationLabel(pkg).toString().lowercase() == name
+            // Exact match
+            val exact = packages.find {
+                pm.getApplicationLabel(it).toString().lowercase() == name
             }
             if (exact != null) return exact.packageName
 
             // Partial match
-            val partial = packages.find { pkg ->
-                val label = pm.getApplicationLabel(pkg).toString().lowercase()
+            val partial = packages.find {
+                val label = pm.getApplicationLabel(it).toString().lowercase()
                 label.contains(name) || name.contains(label)
             }
             if (partial != null) return partial.packageName
 
-            // Known apps fallback
+            // Fallback known apps
             when (name) {
                 "youtube" -> "com.google.android.youtube"
                 "whatsapp" -> "com.whatsapp"
